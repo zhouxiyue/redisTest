@@ -5,3 +5,9 @@
 5.keys *（查看所有的key）
 6.flushall（清空全部数据库）
 7.flushdb（清空当前数据库）
+8.exists key（查看key是否存在）
+9.move key db（从某个数据库移除key）
+10.expire key second（设置key的过期时间）
+11.ttl key（查询key的剩余时间，-2为过期，实现单点登录）
+12.type key（查看类型）
+13.
