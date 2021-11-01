@@ -1,0 +1,5 @@
+1.select 3（切换数据库，一共16个数据库）
+2.dbsize（查询数据库空间）
+3.set key value
+4.get key
+5.keys *（查看所有的key）

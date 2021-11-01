@@ -1,0 +1,3 @@
+redistest
+1.redis-server.exe redis.windows.conf 开启redisserver
+2.redis-benchmark.exe -c 10 -n 100 并发10个连接，总共操作100次
