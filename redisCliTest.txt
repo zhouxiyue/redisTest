@@ -3,3 +3,5 @@
 3.set key value
 4.get key
 5.keys *（查看所有的key）
+6.flushall（清空全部数据库）
+7.flushdb（清空当前数据库）
