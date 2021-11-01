@@ -10,4 +10,144 @@
 10.expire key second（设置key的过期时间）
 11.ttl key（查询key的剩余时间，-2为过期，实现单点登录）
 12.type key（查看类型）
-13.
+13.append key v2（追加v2到value后）
+14.strlen key（查看value的长度）
+15.incr key（value++）
+16.decr key（value--）
+17.incrby key 10 （value+10）
+18.decrby key 10（value-10）
+19.getrange key fromIndex toIndex（查看value从fromIndex到toIndex）
+19.getrange key 0 -1（获取整个value）
+20.setrange key offset value2（将offset下标后的值置为value2）
+21.setex key second value（设置k-v以及过期时间）
+22.setnx key value（set k-v如果不存在）（分布式锁）
+23.mset k1 v1 k2 v2 k3 v3（批量设置k-v对）
+24.mget k1 k2 k3（批量获取k-v对）
+25.msetnx k1 v1 k2 v2 k3 v3（原子操作，要么全部成功，要么全部失败）
+
+26.getset key value（如果不存在则set，如果存在则取出原来的值然后重新set新的值）
+127.0.0.1:6379> getset db redis
+(nil)
+127.0.0.1:6379> get db
+"redis"
+127.0.0.1:6379> getset db mysql
+"redis"
+127.0.0.1:6379> get db
+"mysql"
+
+27.lpust（从左插入） rpush（从右插入） lrange（从左查询）
+127.0.0.1:6379> lpush list one two three
+(integer) 3
+127.0.0.1:6379> lrange list 0 3
+1) "three"
+2) "two"
+3) "one"
+127.0.0.1:6379> rpush list2 one two three
+(integer) 3
+127.0.0.1:6379> lrange list2 0 -1
+1) "one"
+2) "two"
+3) "three"
+
+28.lpop（从左弹出）rpop（从右弹出）
+127.0.0.1:6379> lpop list
+"three"
+127.0.0.1:6379> rpop list2
+"three"
+127.0.0.1:6379> lrange list 0 -1
+1) "two"
+2) "one"
+127.0.0.1:6379> lrange list2 0 -1
+1) "one"
+2) "two"
+
+29.lindex（获取list下标的值）（生产者消费者模式）
+127.0.0.1:6379> lindex list 0
+"two"
+127.0.0.1:6379> lindex list 1
+"one"
+
+30.llen list（返回列表长度）
+
+31.lrem list 1 value （移除list中指定个数的value）
+127.0.0.1:6379> lrange list 0 -1
+1) "three"
+2) "three"
+3) "two"
+4) "one"
+127.0.0.1:6379> lrem list 1 three
+(integer) 1
+127.0.0.1:6379> lrange list 0 -1
+1) "three"
+2) "two"
+3) "one"
+
+32.ltrim（通过下标截取指定长度）
+127.0.0.1:6379> lrange list3 0 -1
+1) "hello1"
+2) "hello2"
+3) "hello3"
+4) "hello4"
+5) "hello5"
+127.0.0.1:6379> ltrim list3 1 2
+OK
+127.0.0.1:6379> lrange list3 0 -1
+1) "hello2"
+2) "hello3"
+
+33.移除列表中的最后一个值到新的列表中
+127.0.0.1:6379> rpoplpush list3 list4
+"hello3"
+127.0.0.1:6379> lrange list3 0 -1
+1) "hello2"
+127.0.0.1:6379> lrange list4 0 -1
+1) "hello3"
+
+34.lset（将list中的某数组下的元素设置为某个值）
+127.0.0.1:6379> exists list5
+(integer) 0
+127.0.0.1:6379> lset list5 0 item
+(error) ERR no such key
+127.0.0.1:6379> lpush list5 item
+(integer) 1
+127.0.0.1:6379> lrange list5 0 0
+1) "item"
+127.0.0.1:6379> lset list5 0 item2
+OK
+127.0.0.1:6379> lrange list5 0 0
+1) "item2"
+127.0.0.1:6379> lset list5 1 other
+(error) ERR index out of range
+
+35.linsert key BEFORE|AFTER pivot value （将某个具体值插入到列表中某个元素的前面或者后面，
+如果有多个相同值，则插入到第一个值前面或后面）
+127.0.0.1:6379> rpush list6 hello
+(integer) 1
+127.0.0.1:6379> rpush list6 world
+(integer) 2
+127.0.0.1:6379> lrange list6 0 -1
+1) "hello"
+2) "world"
+127.0.0.1:6379> linsert list6 before world big
+(integer) 3
+127.0.0.1:6379> lrange list6 0 -1
+1) "hello"
+2) "big"
+3) "world"
+127.0.0.1:6379> rpush list7 hello hello hello hello
+(integer) 4
+127.0.0.1:6379> lrange list7 0 -1
+1) "hello"
+2) "hello"
+3) "hello"
+4) "hello"
+127.0.0.1:6379> linsert list7 after hello world
+(integer) 5
+127.0.0.1:6379> lrange list7 0 -1
+1) "hello"
+2) "world"
+3) "hello"
+4) "hello"
+5) "hello"
+
+36.
