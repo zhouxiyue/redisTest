@@ -150,4 +150,99 @@ OK
 4) "hello"
 5) "hello"
 
-36.
+36.sadd（随机向set里添加元素）smembers（取出set的元素）
+127.0.0.1:6379> sadd myset hello hello2 hello3 hello
+(integer) 3
+127.0.0.1:6379> smembers myset
+1) "hello3"
+2) "hello2"
+3) "hello"
+
+37.sismember （判断set中是否存在某个值）
+127.0.0.1:6379> sismember myset hello
+(integer) 1
+127.0.0.1:6379> sismember myset test
+(integer) 0
+
+38.scard（获取set中的元素个数）
+127.0.0.1:6379> scard myset
+(integer) 3
+
+39.srem（移除set中的某个元素）
+127.0.0.1:6379> srem myset hello
+(integer) 1
+127.0.0.1:6379> smembers myset
+1) "hello3"
+2) "hello2"
+
+40.srandmember set count （随机获取set中的元素，可指定个数）
+127.0.0.1:6379> srandmember myset
+"hello2"
+127.0.0.1:6379> srandmember myset
+"hello3"
+127.0.0.1:6379> srandmember myset 2
+1) "hello2"
+2) "hello3"
+
+41.spop（随机弹出一个元素）
+127.0.0.1:6379> spop myset
+"hello3"
+
+42.smove（将一个元素从源set移动到目标set中）
+127.0.0.1:6379> sadd myset1 hello big world
+(integer) 3
+127.0.0.1:6379> sadd myset2 small
+(integer) 1
+127.0.0.1:6379> smembers myset1
+1) "world"
+2) "big"
+3) "hello"
+127.0.0.1:6379> smembers myset2
+1) "small"
+127.0.0.1:6379> smove myset1 myset2 big
+(integer) 1
+127.0.0.1:6379> smembers myset1
+1) "world"
+2) "hello"
+127.0.0.1:6379> smembers myset2
+1) "big"
+2) "small"
+
+43.sdiff（差集）sinter（交集）sunion（并集）（共同好友，二度好友，推荐好友）
+127.0.0.1:6379> sadd set1 a b c d
+(integer) 4
+127.0.0.1:6379> sadd set2 a b
+(integer) 2
+127.0.0.1:6379> sdiff set1 set2
+1) "c"
+2) "d"
+127.0.0.1:6379> sinter set1 set2
+1) "b"
+2) "a"
+127.0.0.1:6379> sunion set1 set2
+1) "a"
+2) "c"
+3) "d"
+4) "b"
+
+44.hset（存储key map）hget（获取key mapkey对应的value）hmset（批量存储key map）hmget（批量获取key mapkey对应的value）hgetall（获取key对应的所有map键值对）
+127.0.0.1:6379> hset myhash f1 hello
+(integer) 1
+127.0.0.1:6379> hget myhash f1
+"hello"
+127.0.0.1:6379> hget myhash f2
+(nil)
+127.0.0.1:6379> hmset myhash f1 hello f2 world
+OK
+127.0.0.1:6379> hmget myhash f1 f2
+1) "hello"
+2) "world"
+127.0.0.1:6379> hmget myhash f1 f2 f3
+1) "hello"
+2) "world"
+3) (nil)
+127.0.0.1:6379> hgetall myhash
+1) "f1"
+2) "hello"
+3) "f2"
+4) "world"
