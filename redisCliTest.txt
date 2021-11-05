@@ -471,3 +471,170 @@ OK
 6) "beijing"
 
 63.
+127.0.0.1:6379> pfadd mykey a b c d e f g h i j（创建第一组元素）
+(integer) 1
+127.0.0.1:6379> pfcount mykey（统计第一组元素的基数数量）
+(integer) 10
+127.0.0.1:6379> pfadd mykey2 a b f g r s w d x
+(integer) 1
+127.0.0.1:6379> pfcount mykey2
+(integer) 9
+127.0.0.1:6379> pfmerge mykey3 mykey mykey2（合并两组求并集）
+OK
+127.0.0.1:6379> pfcount mykey3（统计基数）
+(integer) 14
+
+64.bitmap（位图，应用：签到打卡，登录）
+127.0.0.1:6379> setbit sign 0 1
+(integer) 0
+127.0.0.1:6379> setbit sign 1 0
+(integer) 0
+127.0.0.1:6379> setbit sign 2 0
+(integer) 0
+127.0.0.1:6379> setbit sign 3 1
+(integer) 0
+127.0.0.1:6379> setbit sign 4 1
+(integer) 0
+127.0.0.1:6379> setbit sign 4 0
+(integer) 1
+127.0.0.1:6379> setbit sign 4 1
+(integer) 0
+127.0.0.1:6379> setbit sign 5 0
+(integer) 0
+127.0.0.1:6379> setbit sign 6 0
+(integer) 0
+127.0.0.1:6379> getbit sign 4
+(integer) 1
+127.0.0.1:6379> getbit sign 5
+(integer) 0
+
+65.bitcount（统计bitmap为1的个数）
+127.0.0.1:6379> bitcount sign
+(integer) 3
+
+66.redis事务
+127.0.0.1:6379> multi（开启事务）
+OK
+127.0.0.1:6379> set k11 v11
+QUEUED
+127.0.0.1:6379> set k22 v22
+QUEUED
+127.0.0.1:6379> get k22
+QUEUED
+127.0.0.1:6379> set k33 v33
+QUEUED
+127.0.0.1:6379> exec（执行事务）
+1) OK
+2) OK
+3) "v22"
+4) OK
+127.0.0.1:6379> multi（开启事务）
+OK
+127.0.0.1:6379> set k11 k11
+QUEUED
+127.0.0.1:6379> set k22 k22
+QUEUED
+127.0.0.1:6379> set k44 v44
+QUEUED
+127.0.0.1:6379> discard（放弃事务）
+OK
+127.0.0.1:6379> get k44
+(nil)
+
+
+67.事务的原子性（编译型异常，代码有问题，命令错误，事务中的所有命令都不会被执行）
+127.0.0.1:6379> multi（开启事务）
+OK
+127.0.0.1:6379> set k1 v1
+QUEUED
+127.0.0.1:6379> set k2 v2
+QUEUED
+127.0.0.1:6379> set k3 v3
+QUEUED
+127.0.0.1:6379> getset k3（输入错误命令）
+(error) ERR wrong number of arguments for 'getset' command
+127.0.0.1:6379> set k4 v4
+QUEUED
+127.0.0.1:6379> set k5 v5
+QUEUED
+127.0.0.1:6379> exec（执行不成功）
+(error) EXECABORT Transaction discarded because of previous errors.
+127.0.0.1:6379> get k5
+(nil)
+
+68.运行时异常（如果事务队列中存在非语法性错误，命令执行时，其他命令可以正常执行，错误命令抛出异常）
+127.0.0.1:6379> set k1 v1
+OK
+127.0.0.1:6379> multi
+OK
+127.0.0.1:6379> incr k1
+QUEUED
+127.0.0.1:6379> set k1 v1
+QUEUED
+127.0.0.1:6379> set k2 v2
+QUEUED
+127.0.0.1:6379> set k3 v3
+QUEUED
+127.0.0.1:6379> get k3
+QUEUED
+127.0.0.1:6379> exec
+1) (error) ERR value is not an integer or out of range
+2) OK
+3) OK
+4) OK
+5) "v3"
+127.0.0.1:6379> get k2
+"v2"
+127.0.0.1:6379> get k3
+"v3"
+
+69.
+127.0.0.1:6379> set money 100
+OK
+127.0.0.1:6379> set out 0
+OK
+127.0.0.1:6379> watch money（监视money对象）
+OK
+127.0.0.1:6379> multi（事务正常结束，数据期间没有发生变动，这个时候正常执行成功）
+OK
+127.0.0.1:6379> decrby money 20
+QUEUED
+127.0.0.1:6379> incrby out 20
+QUEUED
+127.0.0.1:6379> exec
+1) (integer) 80
+2) (integer) 20
+
+70.
+起一个redis客户端线程t1
+127.0.0.1:6379> watch money（监控money对象）
+OK
+127.0.0.1:6379> multi（开启一个事务）
+OK
+127.0.0.1:6379> decrby money 10
+QUEUED
+127.0.0.1:6379> incrby out 10
+QUEUED
+
+另起一个客户端线程t2
+127.0.0.1:6379> set money 1000（修改money值）
+OK
+
+在t1线程执行事务命令队列则执行失败
+127.0.0.1:6379> exec
+(nil)
+127.0.0.1:6379> unwatch（如果失败则解锁）
+OK
+127.0.0.1:6379> watch money（重新获取锁）
+OK
+127.0.0.1:6379> multi
+OK
+127.0.0.1:6379> decrby money 1
+QUEUED
+127.0.0.1:6379> incrby money 1
+QUEUED
+127.0.0.1:6379> exec
+1) (integer) 999
+2) (integer) 1000
+
+
