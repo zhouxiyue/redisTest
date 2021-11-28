@@ -28,7 +28,7 @@ public class TestSet {
         System.out.println(jedis.smembers("set3"));
         System.out.println(jedis.sinter("set2","set3"));
         System.out.println(jedis.sunion("set2","set3"));
-        System.out.println(jedis.sdiff("set2","set3"));
+        System.out.println("diff"+jedis.sdiff("set3","set2"));
         jedis.sinterstore("set4","set2","set3");
         System.out.println(jedis.smembers("set4"));
 
