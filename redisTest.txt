@@ -1,3 +1,33 @@
 redistest
 1.redis-server.exe redis.windows.conf 开启redisserver
 2.redis-benchmark.exe -c 10 -n 100 并发10个连接，总共操作100次
+
+3.获取目录
+127.0.0.1:6379> config get dir
+1) "dir"
+2) "E:\\tool\\Redis-x64-3.2.100"
+
+4.设置密码
+127.0.0.1:6379> config get requirepass
+1) "requirepass"
+2) ""
+127.0.0.1:6379> config set requirepass 123456
+OK
+127.0.0.1:6379> set k1 v1
+(error) NOAUTH Authentication required.
+127.0.0.1:6379> auth 123456
+OK
+127.0.0.1:6379> set k1 v1
+OK
+127.0.0.1:6379> config set requirepass ""
+OK
+127.0.0.1:6379> set k1 v2
+OK
+
+5.设置rdb规则
+（1）save的规则满足（设置conf文件中的rdb规则，如：save 60 5 60s内操作5次则保存）
+（2）执行flushall
+（3）退出redis
+备份自动生成dump.rdb
+如果启动目录下有dump.rdb文件，则启动的时候回自动检查并恢复其中的数据
+
