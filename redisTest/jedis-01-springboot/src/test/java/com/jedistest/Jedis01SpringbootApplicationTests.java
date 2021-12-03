@@ -38,5 +38,4 @@ class Jedis01SpringbootApplicationTests {
             e.printStackTrace();
         }
     }
-
 }
