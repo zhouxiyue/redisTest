@@ -24,10 +24,525 @@ OK
 127.0.0.1:6379> set k1 v2
 OK
 
-5.设置rdb规则
+5.RDB
+设置rdb规则
 （1）save的规则满足（设置conf文件中的rdb规则，如：save 60 5 60s内操作5次则保存）
 （2）执行flushall
 （3）退出redis
-备份自动生成dump.rdb
+主进程继续处理客户端请求，父进程fork一个子进程进行数据备份，
+先将内存内容写进临时的rdb文件中，然后写入完成后替换原来的快照文件，生成正式的dump.rdb文件，子进程退出
 如果启动目录下有dump.rdb文件，则启动的时候回自动检查并恢复其中的数据
+优点：
+（1）适合大规模的数据恢复
+（2）对数据的完整性不高
+缺点：
+（1）需要一定的时间间隔，如果redis意外宕机了，最后一次修改的数据就没有了
+（2）fork进程的时候回占用一定的内存空间
+
+6.AOF
+以日志的形式来记录每一个写操作，将redis执行过的所有指令记录下来（读操作不记录）
+只许追加文件但不可以改写文件，redis启动之初回读取改文件重新构建数据，
+换言之，redis重启的话就根据日志文件appendonly.aof的内容将指令从前到后执行一次以完成数据的恢复工作
+设置aof规则
+（1）appendonly yes
+（2）appendfsync everysec（always/no/everysec）
+（3）no-appendfsync-on-rewrite no
+（4）auto-aof-rewrite-percentage 100 
+        auto-aof-rewrite-min-size 64mb
+
+如果aof文件有错误则redis启动失败
+Bad file format reading the append only file: make a backup of your AOF file, then use ./redis-check-aof --fix <filename>
+
+需要使用工具redis-check-aof --fix 修复aof文件
+E:\tool\Redis-x64-3.2.100>redis-check-aof --fix appendonly.aof
+0x              a8: Expected prefix 'h', got: '*'
+AOF analyzed: size=191, ok_up_to=168, diff=23
+This will shrink the AOF from 191 bytes, with 23 bytes, to 168 bytes
+Continue? [y/N]: y
+Successfully truncated AOF
+如果文件被修复正常，则redis可以正常启动
+
+优点：
+（1）每一次修改都同步，文件的完整性更加好
+（2）默认可以每秒同步一次（可能回丢失1s的数据）
+（3）从不同步效率最高
+
+缺点：
+（1）相对于数据文件来说，aof远远大于rdb，修复速度也比rdb慢
+（2）aof运行效率比rdb慢（io）所有redis的默认配置是rdb不是aof
+
+
+7.redis发布订阅
+发布端：
+127.0.0.1:6379> publish c1 "hello world"
+(integer) 1
+127.0.0.1:6379> publish c1 "hhhhhh"
+(integer) 1
+
+订阅端：
+127.0.0.1:6379> subscribe c1
+Reading messages... (press Ctrl-C to quit)
+1) "subscribe"
+2) "c1"
+3) (integer) 1
+1) "message"
+2) "c1"
+3) "hello world"
+1) "message"
+2) "c1"
+3) "hhhhhh"
+
+8.主从复制
+将一台redis服务器的数据复制到其他redis服务区，前者称为主节点，后者成为从节点
+数据的复制都是单向的，只能由主节点到从节点，master以写为主，slave以读为主
+
+主要作用：
+1.数据冗余
+2.故障恢复
+3.负载均衡
+4.高可用基石
+
+环境配置
+1.查看当前库的信息
+127.0.0.1:6379> info replication
+# Replication
+role:master
+connected_slaves:0
+master_repl_offset:0
+repl_backlog_active:0
+repl_backlog_size:1048576
+repl_backlog_first_byte_offset:0
+repl_backlog_histlen:0
+
+复制四个配置文件，修改对应信息
+1.端口
+2.pid名字
+3.log名字
+4.dump.rdb名字
+
+开启四个redis服务
+C:\Users\15810>netstat -ano |findstr "6379"
+  TCP    127.0.0.1:6379         0.0.0.0:0              LISTENING       13620
+C:\Users\15810>netstat -ano |findstr "6380"
+  TCP    127.0.0.1:6380         0.0.0.0:0              LISTENING       19916
+C:\Users\15810>netstat -ano |findstr "6381"
+  TCP    127.0.0.1:6381         0.0.0.0:0              LISTENING       7788
+C:\Users\15810>netstat -ano |findstr "6382"
+  TCP    127.0.0.1:6382         0.0.0.0:0              LISTENING       18984
+
+开启四个客户端
+E:\tool\Redis-x64-3.2.100>redis-cli.exe -p 6379
+127.0.0.1:6379> ping
+PONG
+127.0.0.1:6379> info replication
+# Replication
+role:master
+connected_slaves:0
+master_repl_offset:0
+repl_backlog_active:0
+repl_backlog_size:1048576
+repl_backlog_first_byte_offset:0
+repl_backlog_histlen:0
+
+配置一主（79）二从（80，81）
+
+根据命令配置
+配置6380为6379的从机
+127.0.0.1:6380> slaveof 127.0.0.1 6379
+OK
+127.0.0.1:6380> info replication
+# Replication
+role:slave
+master_host:127.0.0.1
+master_port:6379
+master_link_status:up
+master_last_io_seconds_ago:4
+master_sync_in_progress:0
+slave_repl_offset:15
+slave_priority:100
+slave_read_only:1
+connected_slaves:0
+master_repl_offset:0
+repl_backlog_active:0
+repl_backlog_size:1048576
+repl_backlog_first_byte_offset:0
+repl_backlog_histlen:0
+
+配置6381为6379的从机
+127.0.0.1:6381> slaveof 127.0.0.1 6379
+OK
+127.0.0.1:6381> info replication
+# Replication
+role:slave
+master_host:127.0.0.1
+master_port:6379
+master_link_status:up
+master_last_io_seconds_ago:1
+master_sync_in_progress:0
+slave_repl_offset:183
+slave_priority:100
+slave_read_only:1
+connected_slaves:0
+master_repl_offset:0
+repl_backlog_active:0
+repl_backlog_size:1048576
+repl_backlog_first_byte_offset:0
+repl_backlog_histlen:0
+
+查看主机6379的信息
+127.0.0.1:6379> info replication
+# Replication
+role:master
+connected_slaves:2
+slave0:ip=127.0.0.1,port=6380,state=online,offset=253,lag=1
+slave1:ip=127.0.0.1,port=6381,state=online,offset=253,lag=1
+master_repl_offset:253
+repl_backlog_active:1
+repl_backlog_size:1048576
+repl_backlog_first_byte_offset:2
+repl_backlog_histlen:252
+
+根据配置文件配置
+# slaveof <masterip> <masterport>
+
+测试主从复制
+主机写入
+127.0.0.1:6379> set k1 v1
+OK
+
+从机查询
+127.0.0.1:6380> get k1
+"v1"
+127.0.0.1:6381> get k1
+"v1"
+127.0.0.1:6381> set k2 v2
+(error) READONLY You can't write against a read only slave.
+
+主机断开连接，从机依旧连接主机，但是没有写操作了
+如果主机重新启动，从机依旧可以获取到主机写入的信息
+
+如果使用命令行配置的主从，如果重启了从机，从机就会变回主机，但是只要重新配置成从机，就可以再次获取主机的所有信息
+slave启动成功连接到master后回发送一个sync同步命令
+master接到命令，启动后台的存盘进程，同时收集所有接受到的用于修改数据集的命令，在后台进程执行完毕之后，
+master将传送整个数据文件到slave，并完成一次完全同步（全量复制）
+
+增量复制
+master继续将新的所有收集到的修改命令一次传递给slave，完成同步
+
+配置链表型的主从
+主（79）-从（80）-从（81）
+79是80的主节点，80是81的主节点
+
+127.0.0.1:6379> info replication
+# Replication
+role:master
+connected_slaves:1
+slave0:ip=127.0.0.1,port=6380,state=online,offset=2699,lag=1
+master_repl_offset:2699
+repl_backlog_active:1
+repl_backlog_size:1048576
+repl_backlog_first_byte_offset:2
+repl_backlog_histlen:2698
+
+127.0.0.1:6380> info replication
+# Replication
+role:slave
+master_host:127.0.0.1
+master_port:6379
+master_link_status:up
+master_last_io_seconds_ago:3
+master_sync_in_progress:0
+slave_repl_offset:2671
+slave_priority:100
+slave_read_only:1
+connected_slaves:1
+slave0:ip=127.0.0.1,port=6381,state=online,offset=953,lag=0
+master_repl_offset:953
+repl_backlog_active:1
+repl_backlog_size:1048576
+repl_backlog_first_byte_offset:2
+repl_backlog_histlen:952
+
+127.0.0.1:6381> info replication
+# Replication
+role:slave
+master_host:127.0.0.1
+master_port:6380
+master_link_status:up
+master_last_io_seconds_ago:4
+master_sync_in_progress:0
+slave_repl_offset:1
+slave_priority:100
+slave_read_only:1
+connected_slaves:0
+master_repl_offset:0
+repl_backlog_active:0
+repl_backlog_size:1048576
+repl_backlog_first_byte_offset:0
+repl_backlog_histlen:0
+
+如果79宕机，可以在80执行slaveof no one，将其置为主节点
+127.0.0.1:6380> slaveof no one
+OK
+127.0.0.1:6380> info replication
+# Replication
+role:master
+connected_slaves:1
+slave0:ip=127.0.0.1,port=6381,state=online,offset=1191,lag=0
+master_repl_offset:1191
+repl_backlog_active:1
+repl_backlog_size:1048576
+repl_backlog_first_byte_offset:2
+repl_backlog_histlen:1190
+如果79重启，则80不会成为其从节点，需要重新配置，除非写入配置文件中
+
+
+9.哨兵模式
+人工干预的主从切换费时费力，更多时候考虑哨兵模式，后台监控主机是否出现故障
+如果出现了故障则根据投票来自动将从节点转换为主节点
+redis提供了哨兵的命令，哨兵是一个独立的进程，作为进程，独立运行
+哨兵通过发送命令，等待redis服务器响应，从而监控运行的多个redis实例
+一个哨兵进程对redis服务进行监控，可能回出现问题，为此，可以使用多个哨兵进程进行监控
+各个哨兵之间还会进行监控，形成多哨兵模式
+
+配置sentinel.conf哨兵模式
+bind 127.0.0.1
+port 26579
+sentinel monitor myredis 127.0.0.1 6379 1（投票票数）
+
+启动哨兵进程
+E:\tool\Redis-x64-3.2.100>redis-server.exe sentinel.conf --sentinel
+
+                _._
+           _.-``__ ''-._
+      _.-``    `.  `_.  ''-._           Redis 3.2.100 (00000000/0) 64 bit
+  .-`` .-```.  ```\/    _.,_ ''-._
+ (    '      ,       .-`  | `,    )     Running in sentinel mode
+ |`-._`-...-` __...-.``-._|'` _.-'|     Port: 26579
+ |    `-._   `._    /     _.-'    |     PID: 19920
+  `-._    `-._  `-./  _.-'    _.-'
+ |`-._`-._    `-.__.-'    _.-'_.-'|
+ |    `-._`-._        _.-'_.-'    |           http://redis.io
+  `-._    `-._`-.__.-'_.-'    _.-'
+ |`-._`-._    `-.__.-'    _.-'_.-'|
+ |    `-._`-._        _.-'_.-'    |
+  `-._    `-._`-.__.-'_.-'    _.-'
+      `-._    `-.__.-'    _.-'
+          `-._        _.-'
+              `-.__.-'
+
+[19920] 01 Dec 17:42:59.759 # Sentinel ID is 5fe705e2ab4bdf5c202954d7b1dc3dbcc235e0fe
+[19920] 01 Dec 17:42:59.759 # +monitor master myredis 127.0.0.1 6379 quorum 1
+[19920] 01 Dec 17:42:59.764 * +slave slave 127.0.0.1:6381 127.0.0.1 6381 @ myredis 127.0.0.1 6379
+[19920] 01 Dec 17:42:59.767 * +slave slave 127.0.0.1:6380 127.0.0.1 6380 @ myredis 127.0.0.1 6379
+
+主节点6379机器宕机后，主节点转移成6381（随机投票算法）
+[19920] 01 Dec 17:46:15.501 # +sdown master myredis 127.0.0.1 6379
+[19920] 01 Dec 17:46:15.501 # +odown master myredis 127.0.0.1 6379 #quorum 1/1
+[19920] 01 Dec 17:46:15.501 # +new-epoch 1
+[19920] 01 Dec 17:46:15.501 # +try-failover master myredis 127.0.0.1 6379
+[19920] 01 Dec 17:46:15.507 # +vote-for-leader 5fe705e2ab4bdf5c202954d7b1dc3dbcc235e0fe 1
+[19920] 01 Dec 17:46:15.507 # +elected-leader master myredis 127.0.0.1 6379
+[19920] 01 Dec 17:46:15.510 # +failover-state-select-slave master myredis 127.0.0.1 6379
+[19920] 01 Dec 17:46:15.620 # +selected-slave slave 127.0.0.1:6381 127.0.0.1 6381 @ myredis 127.0.0.1 6379
+[19920] 01 Dec 17:46:15.620 * +failover-state-send-slaveof-noone slave 127.0.0.1:6381 127.0.0.1 6381 @ myredis 127.0.0.1 6379
+[19920] 01 Dec 17:46:15.712 * +failover-state-wait-promotion slave 127.0.0.1:6381 127.0.0.1 6381 @ myredis 127.0.0.1 6379
+[19920] 01 Dec 17:46:16.609 # +promoted-slave slave 127.0.0.1:6381 127.0.0.1 6381 @ myredis 127.0.0.1 6379
+[19920] 01 Dec 17:46:16.610 # +failover-state-reconf-slaves master myredis 127.0.0.1 6379
+[19920] 01 Dec 17:46:16.688 * +slave-reconf-sent slave 127.0.0.1:6380 127.0.0.1 6380 @ myredis 127.0.0.1 6379
+[19920] 01 Dec 17:46:17.619 * +slave-reconf-inprog slave 127.0.0.1:6380 127.0.0.1 6380 @ myredis 127.0.0.1 6379
+[19920] 01 Dec 17:46:18.691 * +slave-reconf-done slave 127.0.0.1:6380 127.0.0.1 6380 @ myredis 127.0.0.1 6379
+[19920] 01 Dec 17:46:18.747 # +failover-end master myredis 127.0.0.1 6379
+[19920] 01 Dec 17:46:18.747 # +switch-master myredis 127.0.0.1 6379 127.0.0.1 6381
+[19920] 01 Dec 17:46:18.749 * +slave slave 127.0.0.1:6380 127.0.0.1 6380 @ myredis 127.0.0.1 6381
+[19920] 01 Dec 17:46:18.749 * +slave slave 127.0.0.1:6379 127.0.0.1 6379 @ myredis 127.0.0.1 6381
+
+127.0.0.1:6381> info replication
+# Replication
+role:master
+connected_slaves:1
+slave0:ip=127.0.0.1,port=6380,state=online,offset=6500,lag=0
+master_repl_offset:6500
+repl_backlog_active:1
+repl_backlog_size:1048576
+repl_backlog_first_byte_offset:2
+repl_backlog_histlen:6499
+
+
+127.0.0.1:6380> info replication
+# Replication
+role:slave
+master_host:127.0.0.1
+master_port:6381
+master_link_status:up
+master_last_io_seconds_ago:2
+master_sync_in_progress:0
+slave_repl_offset:8112
+slave_priority:100
+slave_read_only:1
+connected_slaves:0
+master_repl_offset:0
+repl_backlog_active:0
+repl_backlog_size:1048576
+repl_backlog_first_byte_offset:2
+repl_backlog_histlen:1652
+
+
+此时6379重启，哨兵将其设置为从节点
+[19920] 01 Dec 17:46:48.771 # +sdown slave 127.0.0.1:6379 127.0.0.1 6379 @ myredis 127.0.0.1 6381
+[19920] 01 Dec 17:50:07.660 # -sdown slave 127.0.0.1:6379 127.0.0.1 6379 @ myredis 127.0.0.1 6381
+[19920] 01 Dec 17:50:17.661 * +convert-to-slave slave 127.0.0.1:6379 127.0.0.1 6379 @ myredis 127.0.0.1 6381
+
+E:\tool\Redis-x64-3.2.100>redis-cli.exe -p 6379
+127.0.0.1:6379> info replication
+# Replication
+role:slave
+master_host:127.0.0.1
+master_port:6381
+master_link_status:up
+master_last_io_seconds_ago:0
+master_sync_in_progress:0
+slave_repl_offset:19065
+slave_priority:100
+slave_read_only:1
+connected_slaves:0
+master_repl_offset:0
+repl_backlog_active:0
+repl_backlog_size:1048576
+repl_backlog_first_byte_offset:0
+repl_backlog_histlen:0
+
+优点：
+1.哨兵集群，基于主从复制模式，所有主从配置优点都有
+2.主从自动切换，故障可以转移，系统可用性更高
+3.手动到自动，更加健壮
+
+缺点：
+1.不好在线扩容
+2.实现哨兵模式配置很复杂
+
+哨兵模式的全部配置
+1.port 26379
+sentinel监听端口，默认是26379，可以修改。
+
+
+2.sentinel monitor <master-name> <ip> <redis-port> <quorum>
+告诉sentinel去监听地址为ip:port的一个master，这里的master-name可以自定义，quorum是一个数字，指明当有多少个sentinel认为一个master失效时，master才算真正失效。master-name只能包含英文字母，数字，和“.-_”这三个字符需要注意的是master-ip 要写真实的ip地址而不要用回环地址（127.0.0.1）。
+配置示例：
+sentinel monitor mymaster 192.168.0.5 6379 2
+
+
+3.sentinel auth-pass <master-name> <password>
+设置连接master和slave时的密码，注意的是sentinel不能分别为master和slave设置不同的密码，因此master和slave的密码应该设置相同。
+配置示例：
+sentinel auth-pass mymaster 0123passw0rd
+
+ 
+
+4.sentinel down-after-milliseconds <master-name> <milliseconds> 
+这个配置项指定了需要多少失效时间，一个master才会被这个sentinel主观地认为是不可用的。 单位是毫秒，默认为30秒
+
+配置示例：
+sentinel down-after-milliseconds mymaster 30000
+
+ 
+
+5.sentinel parallel-syncs <master-name> <numslaves> 
+这个配置项指定了在发生failover主备切换时最多可以有多少个slave同时对新的master进行 同步，这个数字越小，完成failover所需的时间就越长，但是如果这个数字越大，就意味着越 多的slave因为replication而不可用。可以通过将这个值设为 1 来保证每次只有一个slave 处于不能处理命令请求的状态。
+
+配置示例：
+sentinel parallel-syncs mymaster 1
+
+ 
+
+6. sentinel failover-timeout <master-name> <milliseconds>
+failover-timeout 可以用在以下这些方面： 
+
+      1. 同一个sentinel对同一个master两次failover之间的间隔时间。
+
+      2. 当一个slave从一个错误的master那里同步数据开始计算时间。直到slave被纠正为向正确的master那里同步数据时。
+
+      3.当想要取消一个正在进行的failover所需要的时间。  
+
+      4.当进行failover时，配置所有slaves指向新的master所需的最大时间。不过，即使过了这个超时，slaves依然会被正确配置为指向master，但是就不按parallel-syncs所配置的规则来了。
+
+配置示例：
+sentinel failover-timeout mymaster1 20000
+
+ 
+
+7.sentinel的notification-script和reconfig-script是用来配置当某一事件发生时所需要执行的脚本，可以通过脚本来通知管理员，例如当系统运行不正常时发邮件通知相关人员。对于脚本的运行结果有以下规则：
+        若脚本执行后返回1，那么该脚本稍后将会被再次执行，重复次数目前默认为10
+
+        若脚本执行后返回2，或者比2更高的一个返回值，脚本将不会重复执行。
+
+        如果脚本在执行过程中由于收到系统中断信号被终止了，则同返回值为1时的行为相同。
+
+        一个脚本的最大执行时间为60s，如果超过这个时间，脚本将会被一个SIGKILL信号终止，之后重新执行。
+
+1).sentinel notification-script <master-name> <script-path> 
+
+通知型脚本:当sentinel有任何警告级别的事件发生时（比如说redis实例的主观失效和客观失效等等），将会去调用这个脚本，这时这个脚本应该通过邮件，SMS等方式去通知系统管理员关于系统不正常运行的信息。调用该脚本时，将传给脚本两个参数，一个是事件的类型，一个是事件的描述。如果sentinel.conf配置文件中配置了这个脚本路径，那么必须保证这个脚本存在于这个路径，并且是可执行的，否则sentinel无法正常启动成功。
+
+  配置示例：
+ sentinel notification-script mymaster /var/redis/notify.sh
+
+ 
+2).sentinel client-reconfig-script <master-name> <script-path>
+ 当一个master由于failover而发生改变时，这个脚本将会被调用，通知相关的客户端关于master地址已经发生改变的信息。以下参数将会在调用脚本时传给脚本:
+
+       <master-name> <role> <state> <from-ip> <from-port> <to-ip> <to-port>
+
+目前<state>总是“failover”, <role>是“leader”或者“observer”中的一个。 参数 from-ip, from-port, to-ip, to-port是用来和旧的master和新的master(即旧的slave)通信的。这个脚本应该是通用的，能被多次调用，不是针对性的。
+
+   配置示例：
+   sentinel client-reconfig-script mymaster /var/redis/reconfig.sh
+
+8.redis缓存穿透（查不到，命中不到缓存导致）
+用户想查询一个数据，发现redis内存数据库没有，缓存没有命中，于是向持久层数据库查询，当有大量用户都没有命中缓存，
+大量请求涌向持久层数据库，就会给持久层数据库造成很大的压力
+
+解决方案
+布隆过滤器
+对所有可能查询的参数以hash形式存储，在控制层进行校验，不符合则丢弃，避免对底层存储系统的查询压力
+
+缓存空对象
+当存储层不命中，即使返回的是空对象也将其缓存起来，同时设置一个过期时间，之后再访问这个数据将会从缓存读取，保护持久层
+缺点：
+1.缓存需要更多的存储空间来存储很多空值
+2.存储层可以查到，但是缓存空值设置了过期时间，无法保持数据一致性
+
+9.缓存击穿（查询热点key请求量过大导致）
+一个key非常热点，再不停的扛着高并发，大量并发集中对这一个点进行访问，
+当这个key在失效的瞬间，持续大量的并发请求就会穿破缓存，直接请求数据库
+当某个key在过期的瞬间，有大量的请求并发访问，这类数据一般是热点数据，由于缓存过期，
+会同时访问数据库来查询最新数据，并写回缓存，这会导致数据库瞬间压力过大
+
+解决方案
+设置热点数据永不过期
+
+加互斥锁
+分布式锁：使用分布式锁，保证对于每个key同时只有一个线程取查询后端服务，其他线程没有过的分布式锁的权限
+因此需要等待，这种方式将高并发的压力转移到了分布式锁，因此对分布式锁的考验很大
+
+10.缓存雪崩（redis宕机等）
+某一个时间，缓存集中过期失效
+自然幸成的雪崩，是在某个时间段集中创建缓存，这个时候数据库也是可以顶住压力的，只是对数据库产生周期性的压力
+如果是缓存服务节点宕机，对数据库服务器造成的压力是不可预知的，有可能瞬间把数据库压垮
+
+解决方案
+redis高可用
+多增设几台redis服务器，搭建成集群（异地多活）
+
+限流降级
+缓存失效后，通过加锁或者排队来控制字数据库写缓存的线程数量，比如对某个key只允许一个线程查询数据和写缓存，其他线程等待
+
+数据预热
+在正式部署之前，先把数据预先访问一遍，大部分访问的数据就会被加载到缓存中，
+即将发生大并发访问前手动触发加载缓存不同的key，设置不同的过期时间，让缓存失效的时间点尽量均匀
+
+
+
+
+
 
